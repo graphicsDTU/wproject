@@ -1,99 +1,145 @@
+var gl;
 
-/*Creating a canvas */
-var canvas = document.getElementById('my_Canvas');
-gl = canvas.getContext('experimental-webgl');
+var mode = true;
+var first = true;
+var second = false;
+var third = false;
 
-/*Defining and storing the geometry*/
+var max_triangles = 100000;
+var max_verts = 3 * max_triangles;
+var index = 0;
 
-var vertices = [
-   1.0, 0.0, 0.0,
-   0.0, 0.0, 0.0,
-   1.0, 1.0, 0.0,
+var t1 = [];
+var t2 = [];
+var t3 = [];
+var t = [];
+
+var points = [];
+var triangles = [];
+var colors = [];
+
+var baseColors = [
+  vec4(0.0, 0.0, 0.0, 1.0),  // black
+    vec4(1.0, 0.0, 0.0, 1.0),  // red
+    vec4(1.0, 1.0, 0.0, 1.0),  // yellow
+    vec4(0.0, 1.0, 0.0, 1.0),  // green
+    vec4(0.0, 0.0, 1.0, 1.0),  // blue
+    vec4(1.0, 0.0, 1.0, 1.0),  // magenta
+    vec4(0.0, 1.0, 1.0, 1.0)   // cyan
 ];
 
-var colors = [0, 0, 1, 1, 0, 0, 0, 1, 0, 0.5, 1.0, 0.5,];
+window.onload = function init() {
+  canvas = document.getElementById("gl-Canvas");
+  gl = WebGLUtils.setupWebGL(canvas);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0.3921, 0.5843, 0.9294, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
 
-indices = [3, 2, 1, 3, 1, 0];
+  program = initShaders(gl, "vertex-shader", "fragment-shader");
+  gl.useProgram(program);
 
-// Create an empty buffer object and store vertex data
-var vertex_buffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  var addPoints = document.getElementById("addPoints");
+  var addTriangles = document.getElementById("addTriangles");
 
-// Create an empty buffer object and store Index data
-var Index_Buffer = gl.createBuffer();
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Index_Buffer);
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+  
+  var cBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, sizeof['vec3'] * max_verts, gl.STATIC_DRAW);
 
-// Create an empty buffer object and store color data
-var color_buffer = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, color_buffer);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-/*======================= Shaders =======================*/
-
-// vertex shader source code
-var vertCode = 'attribute vec3 coordinates;' +
-   'attribute vec3 color;' +
-   'varying vec3 vColor;' +
-   'void main(void) {' +
-   ' gl_Position = vec4(coordinates, 1.0);' +
-   'vColor = color;' +
-   '}';
-
-// Create a vertex shader object
-var vertShader = gl.createShader(gl.VERTEX_SHADER);
-gl.shaderSource(vertShader, vertCode);
-gl.compileShader(vertShader);
+  var vColor = gl.getAttribLocation(program, "vColor");
+  gl.vertexAttribPointer(vColor, 3, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(vColor);
 
 
-// fragment shader source code
-var fragCode = 'precision mediump float;' +
-   'varying vec3 vColor;' +
-   'void main(void) {' +
-   'gl_FragColor = vec4(vColor, 1.);' +
-   '}';
+  var vBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, max_verts, gl.STATIC_DRAW);
 
-// fragment shader object
-var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
-gl.shaderSource(fragShader, fragCode);
-gl.compileShader(fragShader);
+  addTriangles.addEventListener("click", function (event) {
+    mode = false;
+  });
 
-// Create a shader program object to
-// store the combined shader program
-var shaderProgram = gl.createProgram();
+  addPoints.addEventListener("click", function (event) {
+    mode = true;
+  });
 
-// Attach a vertex shader
-gl.attachShader(shaderProgram, vertShader);
-gl.attachShader(shaderProgram, fragShader);
-gl.linkProgram(shaderProgram);
-gl.useProgram(shaderProgram);
-/* ======== Associating shaders to buffer objects =======*/
+  var vPosition = gl.getAttribLocation(program, "vPosition");
+  gl.vertexAttribPointer(vPosition, 2, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(vPosition);
 
-// Bind vertex buffer object
-gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
-// Bind index buffer object
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, Index_Buffer);
-// Get the attribute location
-var coord = gl.getAttribLocation(shaderProgram, "coordinates");
-// point an attribute to the currently bound VBO
-gl.vertexAttribPointer(coord, 2, gl.FLOAT, false, 0, 0);
-// Enable the attribute
-gl.enableVertexAttribArray(coord);
-// bind the color buffer
-gl.bindBuffer(gl.ARRAY_BUFFER, color_buffer);
-// get the attribute location
-var color = gl.getAttribLocation(shaderProgram, "color");
-// point attribute to the volor buffer object
-gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 0, 0);
-// enable the color attribute
-gl.enableVertexAttribArray(color);
+  canvas.addEventListener("click", function (ev) {
+    var bbox = ev.target.getBoundingClientRect();
+    mousepos = vec2(2 * (ev.clientX - bbox.left) / canvas.width - 1, 2 * (canvas.height - ev.clientY + bbox.top - 1) / canvas.height - 1);
 
-/*============Drawing the Quad====================*/
-gl.clearColor(0.3921, 0.5843, 0.9294, 1.0);
-gl.enable(gl.DEPTH_TEST);
-gl.clear(gl.COLOR_BUFFER_BIT);
-gl.viewport(0, 0, canvas.width, canvas.height);
-gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+    if (mode) {
+      t = vec3(baseColors[colorMenu.selectedIndex]);
+      gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec3'] * index, flatten(t));
+      gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+      points.push(index);
+      t1 = mousepos;
+      gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec2'] * index, flatten(t1));
+      index++;
+
+    } else {
+
+      if (first) {
+        t = vec3(baseColors[colorMenu.selectedIndex]);
+        gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec3'] * index, flatten(t));
+        gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+
+
+        points.push(index);
+        t1 = vec2(mousepos);
+        gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec2'] * index, flatten(t1));
+        index++;
+
+        first = false;
+        second = true;
+
+      } else if (second) {
+        colors.push(index);
+        t = vec3(baseColors[colorMenu.selectedIndex]);
+        gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec3'] * index, flatten(t));
+        gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+
+        points.push(index);
+        t2 = vec2(mousepos);
+        gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec2'] * index, flatten(t2));
+        index++;
+
+        second = false;
+        third = true;
+
+      } else {
+        t = vec3(baseColors[colorMenu.selectedIndex]);
+        gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec3'] * index, flatten(t));
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+
+        points.pop();
+        triangles.push(points.pop());
+        t3 = vec2(mousepos);
+        gl.bufferSubData(gl.ARRAY_BUFFER, sizeof['vec2'] * index, flatten(t3));
+        index++;
+        first = true;
+        third = false;
+      }
+    }
+  });
+  render();
+}
+
+function render() {
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  for (var i = 0; i < points.length; i++) {
+    gl.drawArrays(gl.POINTS, points[i], 1);
+  }
+  for (var i = 0; i < triangles.length; i++) {
+    gl.drawArrays(gl.TRIANGLE_FAN, triangles[i], 3);
+  }
+  window.requestAnimFrame(render);
+}
